@@ -78,6 +78,11 @@ jobs:
           if not exist "%VCPKG_DEFAULT_BINARY_CACHE%" mkdir "%VCPKG_DEFAULT_BINARY_CACHE%"
           git clone --depth 1 --branch %VCPKG_TAG% https://github.com/microsoft/vcpkg.git || exit /b 1
           call .\vcpkg\bootstrap-vcpkg.bat -disableMetrics || exit /b 1
+          rem 7-zip.org no longer hosts the 7-Zip build this vcpkg release expects; seed it
+          rem from SourceForge (vcpkg still checks its SHA512 from scripts\vcpkgTools.xml).
+          if not exist .\vcpkg\downloads mkdir .\vcpkg\downloads
+          curl -fsSL --retry 3 -o .\vcpkg\downloads\7z2107-extra.7z https://downloads.sourceforge.net/project/sevenzip/7-Zip/21.07/7z2107-extra.7z || exit /b 1
+          where perl
           .\vcpkg\vcpkg.exe integrate install || exit /b 1
           xcopy /K /Y /H /C /I /E .\vcpkg-ports\* .\vcpkg\ports\* || exit /b 1
           cd .\vcpkg
