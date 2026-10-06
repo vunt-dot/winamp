@@ -9,6 +9,8 @@ jobs:
   windows:
     name: Windows x86 Release
     runs-on: windows-2022
+    outputs:
+      exe_built: ${{ steps.summary.outputs.exe_built }}
     timeout-minutes: 360
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
@@ -134,18 +136,28 @@ jobs:
             /flp1:errorsonly;logfile=msbuild-errors.log /flp2:warningsonly;logfile=msbuild-warnings.log
 
       - name: Summarize build errors
+        id: summary
         if: always()
         shell: pwsh
         run: |
           if (Test-Path msbuild-errors.log) {
-            $errors = Get-Content msbuild-errors.log
+            # One line per distinct error, also printed to the log so it can be read without the artifact.
+            $errors = Get-Content msbuild-errors.log | ForEach-Object { $_.Trim() } | Sort-Object -Unique
+            Write-Host "===== $($errors.Count) distinct MSBuild errors ====="
+            $errors | Select-Object -First 300 | ForEach-Object { Write-Host $_ }
             "### MSBuild errors: $($errors.Count)" >> $env:GITHUB_STEP_SUMMARY
             '```' >> $env:GITHUB_STEP_SUMMARY
             $errors | Select-Object -First 200 >> $env:GITHUB_STEP_SUMMARY
             '```' >> $env:GITHUB_STEP_SUMMARY
           }
+          $exe = Test-Path Build\Winamp_x86_Release\winamp.exe
+          "exe_built=$($exe.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "winamp.exe built: $exe"
           if (Test-Path Build\Winamp_x86_Release) {
-            Get-ChildItem -Recurse Build\Winamp_x86_Release -Include *.exe,*.dll,*.w5s,*.wac | Measure-Object | ForEach-Object { "Built binaries: $($_.Count)" >> $env:GITHUB_STEP_SUMMARY }
+            $bins = Get-ChildItem -Recurse Build\Winamp_x86_Release -Include *.exe,*.dll,*.w5s,*.wac
+            Write-Host "Built binaries: $($bins.Count)"
+            $bins | ForEach-Object { Write-Host "  $($_.FullName.Substring((Resolve-Path Build\Winamp_x86_Release).Path.Length))" }
+            "Built binaries: $($bins.Count), winamp.exe: $exe" >> $env:GITHUB_STEP_SUMMARY
           }
 
       - name: Upload build logs
@@ -176,6 +188,8 @@ jobs:
   deb:
     name: Ubuntu .deb (Wine)
     needs: windows
+    # Package whenever winamp.exe was produced, even if some optional plugins failed.
+    if: ${{ !cancelled() && needs.windows.outputs.exe_built == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
