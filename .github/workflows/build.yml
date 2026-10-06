@@ -3,7 +3,6 @@ name: Build
 on:
   push:
     branches: [community, 'claude/**']
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -13,6 +12,9 @@ jobs:
     timeout-minutes: 360
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
+      # vcpkg-ports/ pins late-2022 port versions; current vcpkg's helper ports
+      # (e.g. brotli for freetype) no longer match them, so use the matching release.
+      VCPKG_TAG: 2022.11.14
     steps:
       - uses: actions/checkout@v4
 
@@ -36,12 +38,20 @@ jobs:
             'Microsoft.VisualStudio.Component.VC.14.29.16.11.MFC',
             'Microsoft.VisualStudio.Component.Windows10SDK.19041'
           )
-          $installArgs = @('modify', '--installPath', $vs, '--quiet', '--norestart', '--nocache')
+          $installArgs = @('modify', '--installPath', "`"$vs`"", '--quiet', '--norestart', '--nocache')
           foreach ($c in $components) { $installArgs += @('--add', $c) }
-          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-          $p = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
-          Write-Host "vs_installer exit code: $($p.ExitCode)"
+          if (Test-Path "$vs\VC\Tools\MSVC\14.29.*\atlmfc\include\atlbase.h") {
+            Write-Host "v142 toolset with ATL already installed"
+          } else {
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+            $p = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+            Write-Host "Visual Studio installer exit code: $($p.ExitCode)"
+          }
           Get-ChildItem "$vs\VC\Tools\MSVC" | Select-Object Name
+          if (-not (Test-Path "$vs\VC\Tools\MSVC\14.29.*\atlmfc\include\atlbase.h")) {
+            Write-Host "::error::MSVC 14.29 (v142) with ATL is not installed"
+            exit 1
+          }
 
       # README: "Microsoft ATLMFC lib fix" (atltransactionmanager.h does not compile otherwise).
       - name: Patch atltransactionmanager.h
@@ -55,18 +65,18 @@ jobs:
           }
 
       - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: vcpkg-binary-cache
-          key: vcpkg-x86-${{ hashFiles('vcpkg-ports/**') }}-${{ github.run_id }}
-          restore-keys: vcpkg-x86-${{ hashFiles('vcpkg-ports/**') }}-
+          key: vcpkg-x86-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg-ports/**') }}-${{ github.run_id }}
+          restore-keys: vcpkg-x86-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg-ports/**') }}-
 
       # Same steps as install-packages.cmd, without the interactive pauses.
       - name: Install vcpkg packages
         shell: cmd
         run: |
           if not exist "%VCPKG_DEFAULT_BINARY_CACHE%" mkdir "%VCPKG_DEFAULT_BINARY_CACHE%"
-          git clone --depth 1 https://github.com/microsoft/vcpkg.git || exit /b 1
+          git clone --depth 1 --branch %VCPKG_TAG% https://github.com/microsoft/vcpkg.git || exit /b 1
           call .\vcpkg\bootstrap-vcpkg.bat -disableMetrics || exit /b 1
           .\vcpkg\vcpkg.exe integrate install || exit /b 1
           xcopy /K /Y /H /C /I /E .\vcpkg-ports\* .\vcpkg\ports\* || exit /b 1
@@ -91,6 +101,14 @@ jobs:
             restclient-cpp:x86-windows-static-md restclient-cpp:x86-windows-static ^
             spdlog:x86-windows-static-md ^
             zlib:x86-windows-static-md zlib:x86-windows-static
+
+      # Save even when a later port fails, so the next run only rebuilds what is missing.
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg-binary-cache
+          key: vcpkg-x86-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg-ports/**') }}-${{ github.run_id }}
 
       - name: Upload vcpkg failure logs
         if: failure()
