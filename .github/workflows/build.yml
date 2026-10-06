@@ -69,7 +69,9 @@ jobs:
         with:
           path: vcpkg-binary-cache
           key: vcpkg-x86-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg-ports/**') }}-${{ github.run_id }}
-          restore-keys: vcpkg-x86-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg-ports/**') }}-
+          restore-keys: |
+            vcpkg-x86-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg-ports/**') }}-
+            vcpkg-x86-${{ env.VCPKG_TAG }}-
 
       # Same steps as install-packages.cmd, without the interactive pauses.
       - name: Install vcpkg packages
