@@ -12,9 +12,9 @@ jobs:
     timeout-minutes: 360
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
-      # vcpkg-ports/ pins late-2022 port versions; current vcpkg's helper ports
-      # (e.g. brotli for freetype) no longer match them, so use the matching release.
-      VCPKG_TAG: 2022.11.14
+      # Current vcpkg: older releases download tools (7-Zip, MSYS2 packages) from URLs
+      # that no longer exist. vcpkg-ports/ overlays still pin the library versions.
+      VCPKG_TAG: master
     steps:
       - uses: actions/checkout@v4
 
@@ -78,18 +78,13 @@ jobs:
           if not exist "%VCPKG_DEFAULT_BINARY_CACHE%" mkdir "%VCPKG_DEFAULT_BINARY_CACHE%"
           git clone --depth 1 --branch %VCPKG_TAG% https://github.com/microsoft/vcpkg.git || exit /b 1
           call .\vcpkg\bootstrap-vcpkg.bat -disableMetrics || exit /b 1
-          rem 7-zip.org no longer hosts the 7-Zip build this vcpkg release expects; seed it
-          rem from SourceForge (vcpkg still checks its SHA512 from scripts\vcpkgTools.xml).
-          if not exist .\vcpkg\downloads mkdir .\vcpkg\downloads
-          curl -fsSL --retry 3 -o .\vcpkg\downloads\7z2107-extra.7z https://downloads.sourceforge.net/project/sevenzip/7-Zip/21.07/7z2107-extra.7z || exit /b 1
-          where perl
           .\vcpkg\vcpkg.exe integrate install || exit /b 1
           xcopy /K /Y /H /C /I /E .\vcpkg-ports\* .\vcpkg\ports\* || exit /b 1
           cd .\vcpkg
           vcpkg install --recurse ^
             alac:x86-windows-static-md ^
             expat:x86-windows-static-md expat:x86-windows-static ^
-            freetype:x86-windows-static-md ^
+            freetype[core,zlib,png,bzip2]:x86-windows-static-md ^
             ijg-libjpeg:x86-windows-static-md ^
             libflac:x86-windows-static-md ^
             libogg:x86-windows-static-md ^
@@ -179,7 +174,6 @@ jobs:
   deb:
     name: Ubuntu .deb (Wine)
     needs: windows
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
