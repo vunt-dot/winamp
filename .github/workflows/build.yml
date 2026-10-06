@@ -1,0 +1,180 @@
+name: Build
+
+on:
+  push:
+    branches: [community, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: Windows x86 Release
+    runs-on: windows-2022
+    timeout-minutes: 360
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate Visual Studio
+        id: vs
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $path = & $vswhere -latest -products * -property installationPath
+          "path=$path" >> $env:GITHUB_OUTPUT
+          Write-Host "Visual Studio: $path"
+
+      # The projects target the VS2019 toolset (v142) and use ATL/MFC.
+      - name: Install v142 toolset with ATL/MFC
+        shell: pwsh
+        run: |
+          $vs = "${{ steps.vs.outputs.path }}"
+          $components = @(
+            'Microsoft.VisualStudio.Component.VC.14.29.16.11.x86.x64',
+            'Microsoft.VisualStudio.Component.VC.14.29.16.11.ATL',
+            'Microsoft.VisualStudio.Component.VC.14.29.16.11.MFC',
+            'Microsoft.VisualStudio.Component.Windows10SDK.19041'
+          )
+          $installArgs = @('modify', '--installPath', $vs, '--quiet', '--norestart', '--nocache')
+          foreach ($c in $components) { $installArgs += @('--add', $c) }
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          $p = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          Write-Host "vs_installer exit code: $($p.ExitCode)"
+          Get-ChildItem "$vs\VC\Tools\MSVC" | Select-Object Name
+
+      # README: "Microsoft ATLMFC lib fix" (atltransactionmanager.h does not compile otherwise).
+      - name: Patch atltransactionmanager.h
+        shell: pwsh
+        run: |
+          $vs = "${{ steps.vs.outputs.path }}"
+          Get-ChildItem "$vs\VC\Tools\MSVC\*\atlmfc\include\atltransactionmanager.h" | ForEach-Object {
+            $text = Get-Content $_.FullName -Raw
+            $patched = $text.Replace('return ::DeleteFile((LPTSTR)lpFileName);', 'return DeleteFile((LPTSTR)lpFileName);')
+            if ($patched -ne $text) { Set-Content -Path $_.FullName -Value $patched -NoNewline; Write-Host "patched $($_.FullName)" }
+          }
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-binary-cache
+          key: vcpkg-x86-${{ hashFiles('vcpkg-ports/**') }}-${{ github.run_id }}
+          restore-keys: vcpkg-x86-${{ hashFiles('vcpkg-ports/**') }}-
+
+      # Same steps as install-packages.cmd, without the interactive pauses.
+      - name: Install vcpkg packages
+        shell: cmd
+        run: |
+          if not exist "%VCPKG_DEFAULT_BINARY_CACHE%" mkdir "%VCPKG_DEFAULT_BINARY_CACHE%"
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git || exit /b 1
+          call .\vcpkg\bootstrap-vcpkg.bat -disableMetrics || exit /b 1
+          .\vcpkg\vcpkg.exe integrate install || exit /b 1
+          xcopy /K /Y /H /C /I /E .\vcpkg-ports\* .\vcpkg\ports\* || exit /b 1
+          cd .\vcpkg
+          vcpkg install --recurse ^
+            alac:x86-windows-static-md ^
+            expat:x86-windows-static-md expat:x86-windows-static ^
+            freetype:x86-windows-static-md ^
+            ijg-libjpeg:x86-windows-static-md ^
+            libflac:x86-windows-static-md ^
+            libogg:x86-windows-static-md ^
+            libpng:x86-windows-static-md ^
+            libsndfile:x86-windows-static-md ^
+            libtheora:x86-windows-static-md ^
+            libvorbis:x86-windows-static-md ^
+            libvpx:x86-windows-static-md ^
+            minizip:x86-windows-static-md ^
+            mp3lame:x86-windows-static-md ^
+            mpg123:x86-windows-static-md ^
+            openssl:x86-windows-static-md openssl:x86-windows-static ^
+            pthread:x86-windows-static-md pthread:x86-windows-static ^
+            restclient-cpp:x86-windows-static-md restclient-cpp:x86-windows-static ^
+            spdlog:x86-windows-static-md ^
+            zlib:x86-windows-static-md zlib:x86-windows-static
+
+      - name: Upload vcpkg failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcpkg-logs
+          path: vcpkg/buildtrees/**/*.log
+          if-no-files-found: ignore
+
+      - name: Unpack Qt runtime
+        shell: cmd
+        run: 7z x .\Qt\DLL_5.12_x86\Release.7z.001 -y -o.\Qt\DLL_5.12_x86
+
+      - name: Build winampAll_2019.sln (Release|Win32)
+        id: build
+        continue-on-error: true
+        shell: cmd
+        run: |
+          call "${{ steps.vs.outputs.path }}\VC\Auxiliary\Build\vcvars32.bat" -vcvars_ver=14.29 || exit /b 1
+          msbuild winampAll_2019.sln /m /p:Configuration=Release /p:Platform=Win32 /nologo /v:minimal ^
+            /flp1:errorsonly;logfile=msbuild-errors.log /flp2:warningsonly;logfile=msbuild-warnings.log
+
+      - name: Summarize build errors
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path msbuild-errors.log) {
+            $errors = Get-Content msbuild-errors.log
+            "### MSBuild errors: $($errors.Count)" >> $env:GITHUB_STEP_SUMMARY
+            '```' >> $env:GITHUB_STEP_SUMMARY
+            $errors | Select-Object -First 200 >> $env:GITHUB_STEP_SUMMARY
+            '```' >> $env:GITHUB_STEP_SUMMARY
+          }
+          if (Test-Path Build\Winamp_x86_Release) {
+            Get-ChildItem -Recurse Build\Winamp_x86_Release -Include *.exe,*.dll,*.w5s,*.wac | Measure-Object | ForEach-Object { "Built binaries: $($_.Count)" >> $env:GITHUB_STEP_SUMMARY }
+          }
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msbuild-logs
+          path: msbuild-*.log
+          if-no-files-found: ignore
+
+      - name: Upload Winamp (Windows x86)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Winamp_x86_Release
+          path: |
+            Build/Winamp_x86_Release
+            !Build/Winamp_x86_Release/**/*.pdb
+          if-no-files-found: warn
+
+      - name: Fail if the build failed
+        if: steps.build.outcome != 'success'
+        shell: pwsh
+        run: |
+          Write-Host "::error::msbuild failed - see the job summary and the msbuild-logs artifact"
+          exit 1
+
+  deb:
+    name: Ubuntu .deb (Wine)
+    needs: windows
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: Winamp_x86_Release
+          path: winamp-build
+
+      - name: Build .deb
+        run: |
+          mkdir -p out
+          packaging/linux/build-deb.sh winamp-build 5.9.2-1 out
+          dpkg-deb -I out/*.deb
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: winamp-deb
+          path: out/*.deb
