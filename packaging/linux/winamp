@@ -1,0 +1,76 @@
+#!/bin/sh
+# Launch the Windows build of Winamp under Wine with a per-user prefix.
+#
+# Environment overrides:
+#   WINAMP_PREFIX  Wine prefix to use (default: ~/.local/share/winamp/prefix)
+#   WINAMP_DPI     force the Windows DPI (96 = 100%, 144 = 150%, 192 = 200%)
+
+set -e
+
+APPDIR=/opt/winamp
+export WINEPREFIX="${WINAMP_PREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/winamp/prefix}"
+export WINEDEBUG="${WINEDEBUG:--all}"
+
+message() {
+	if command -v zenity >/dev/null 2>&1 && [ -n "$DISPLAY$WAYLAND_DISPLAY" ]; then
+		zenity --warning --title=Winamp --no-wrap --text="$1" 2>/dev/null || true
+	else
+		echo "winamp: $1" >&2
+	fi
+}
+
+if ! command -v wine >/dev/null 2>&1; then
+	message "Wine is not installed. Install it with:\n\n  sudo apt install wine"
+	exit 1
+fi
+
+# The x86 build needs 32-bit Wine: either wine32:i386 (multiarch) or a WoW64 Wine.
+if [ -f "$APPDIR/.arch-x86" ] \
+	&& [ ! -d /usr/lib/i386-linux-gnu/wine ] && [ ! -d /usr/lib/wine/i386-windows ] \
+	&& [ ! -d /opt/wine-stable/lib/wine/i386-windows ]; then
+	message "Winamp needs 32-bit Wine support. Install it with:\n\n  sudo dpkg --add-architecture i386\n  sudo apt update\n  sudo apt install wine32:i386"
+fi
+
+# Pick the DPI Windows apps should see: Xft.dpi follows the desktop scaling on
+# GNOME/KDE (X11 and XWayland), so 4K at 200% reports 192.
+detect_dpi() {
+	if [ -n "$WINAMP_DPI" ]; then
+		echo "$WINAMP_DPI"
+		return
+	fi
+	dpi=""
+	if command -v xrdb >/dev/null 2>&1; then
+		dpi=$(xrdb -query 2>/dev/null | awk '/^Xft\.dpi:/ { printf "%d", $2 }')
+	fi
+	if [ -z "$dpi" ] && command -v gsettings >/dev/null 2>&1; then
+		scale=$(gsettings get org.gnome.desktop.interface scaling-factor 2>/dev/null | awk '{ print $NF }')
+		case "$scale" in ''|0) scale=1 ;; esac
+		dpi=$((96 * scale))
+	fi
+	echo "${dpi:-96}"
+}
+
+if [ ! -f "$WINEPREFIX/.winamp-initialized" ] || [ -n "$WINAMP_DPI" ]; then
+	mkdir -p "$WINEPREFIX"
+	# Create the prefix quietly (no Mono/Gecko install prompts).
+	WINEDLLOVERRIDES="mscoree,mshtml=" wineboot -i >/dev/null 2>&1 || true
+	dpi=$(detect_dpi)
+	wine reg add "HKCU\\Control Panel\\Desktop" /v LogPixels /t REG_DWORD /d "$dpi" /f >/dev/null 2>&1 || true
+	wineserver -w 2>/dev/null || true
+	touch "$WINEPREFIX/.winamp-initialized"
+fi
+
+# Turn Linux paths passed on the command line (e.g. from the file manager)
+# into Windows paths; URLs and switches pass through unchanged.
+first=1
+for arg in "$@"; do
+	if [ "$first" = 1 ]; then set --; first=0; fi
+	# Winamp's own switches also start with "/" (e.g. /ADD), so only convert existing files.
+	if [ -e "$arg" ]; then
+		arg=$(winepath -w "$arg" 2>/dev/null || echo "$arg")
+	fi
+	set -- "$@" "$arg"
+done
+
+cd "$APPDIR"
+exec wine "$APPDIR/winamp.exe" "$@"
