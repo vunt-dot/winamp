@@ -42,3 +42,10 @@ goto line 427 and change from 'return ::DeleteFile((LPTSTR)lpFileName);' to 'ret
 #### Intel IPP 6.1.1.035
 We take Intel IPP 6.1.1.035, modify it and pack to archive.
 Run unpack_intel_ipp_6.1.1.035.cmd to unpack it.
+
+## Default skin and high DPI (this fork)
+
+- The default skin is the classic `base-2.91.wsz`, shipped in `Src/resources/skins/`. Both the post-build step and the installer copy every `*.wsz` in that folder into Winamp's `Skins` folder.
+- To also ship **Winamp5 Classified v5.5**, download it from https://skins.webamp.org/skin/b0fb83cc20af3abe264291bb17fb2a13/Winamp5_Classified_v5.5.wsz/ and save it as `Src/resources/skins/Winamp5_Classified_v5.5.wsz` before building. Switch skins with right-click → Skins, or Alt+S.
+- High DPI and 4K: `winamp.exe` is DPI-aware, so Windows doesn't blur it. On a fresh install with display scaling of 150% or more, the main window and EQ start in double size (Ctrl+D toggles it). That pixel-doubles classic skins so they look sharp. The x64 build now embeds `manifest64.xml` as well.
+- Build steps: install VS2019 with the v142 toolset and Windows SDK 10.0.19041, set up the dependencies above, then run `Src\winampAll\build_winampAll_2019.cmd` or build `winampAll_2019.sln`. Use the **Release|Win32** (x86) build: the x64 build has no modern-skin (Bento) support. Output goes to `Build\Winamp_x86_Release\`.

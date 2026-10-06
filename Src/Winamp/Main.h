@@ -85,6 +85,7 @@ extern HINSTANCE language_pack_instance;
 #define MODERN_SKIN_NAME	L"Winamp Modern"
 #define BENTO_SKIN_NAME		L"Bento"
 #define BIG_BENTO_SKIN_NAME L"Big Bento"
+#define DEFAULT_SKIN_NAME	L"base-2.91.wsz"
 
 	/***********************
 		*** about.c

@@ -42,6 +42,8 @@ Function ${INSTALL_TYPE_PREFIX}Skins_DeleteFolder
 	RMDir /r "$0\${MODERNSKINNAME}"
 	RMDir /r "$0\Bento"
 	RMDir /r "$0\Big Bento"
+	Delete "$0\base-2.91.wsz"
+	Delete "$0\Winamp5_Classified_v5.5.wsz"
 	RMDir "$0" ; don't try to delete, prompt user later
 	Pop $0
 FunctionEnd

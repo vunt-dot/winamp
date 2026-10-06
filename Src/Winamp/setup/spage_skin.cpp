@@ -107,7 +107,7 @@ HRESULT setup_page_skin::Save(HWND hwndText)
 	return S_OK;//(count) ? S_OK : S_FALSE;
 }
 
-static BOOL IsForceBento()
+static BOOL IsForceDefaultSkin()
 {
 	wchar_t szVer[128] = {0};
 	if (GetPrivateProfileIntW(L"WinampReg", L"IsFirstInst", 0, INI_FILE)) return TRUE;
@@ -120,8 +120,8 @@ HRESULT setup_page_skin::Revert(void)
 {
 	HRESULT hr(S_OK);
 
-	if (NULL != config_skin && !IsForceBento()) StringCchCopyW(szSelectionPath, sizeof(szSelectionPath)/sizeof(wchar_t), config_skin);
-	else StringCchCopyW(szSelectionPath, sizeof(szSelectionPath)/sizeof(wchar_t), L"Bento");
+	if (NULL != config_skin && !IsForceDefaultSkin()) StringCchCopyW(szSelectionPath, sizeof(szSelectionPath)/sizeof(wchar_t), config_skin);
+	else StringCchCopyW(szSelectionPath, sizeof(szSelectionPath)/sizeof(wchar_t), DEFAULT_SKIN_NAME);
 
 	if (hwnd) 
 	{	
@@ -137,7 +137,7 @@ HRESULT setup_page_skin::IsDirty(void)
 {
 	INT cr;
 
-	if (IsForceBento()) return S_OK;
+	if (IsForceDefaultSkin()) return S_OK;
 
 	cr = ComparePath(config_skin, szSelectionPath, SKINDIR);
 	if (!cr) return E_UNEXPECTED;
