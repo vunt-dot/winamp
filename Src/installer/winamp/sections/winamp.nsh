@@ -412,6 +412,11 @@ ${WinampSection} "winampApplication" $(secWinamp) IDX_SEC_WINAMP           ; <<<
 	RMDir /r "$R0\Big Bento"
 	SetDetailsPrint lastused
 
+	; classic skins: base-2.91 is the default (see DEFAULT_SKIN_NAME), Classified is optional
+	SetOutPath $R0
+	File "..\..\resources\skins\base-2.91.wsz"
+	File /nonfatal "..\..\resources\skins\Winamp5_Classified_v5.5.wsz"
+
 	SetOutPath $INSTDIR\Shared
 	File "${FILES_PATH}\Shared\nsutil.dll"
 	File "${FILES_PATH}\Shared\tataki.dll"

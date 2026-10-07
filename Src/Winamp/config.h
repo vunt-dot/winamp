@@ -135,7 +135,7 @@ CONFIG_EXT int config_user_consent_join_channels DEF_VAL(-1);
 CONFIG_EXT int config_newverchk2 DEF_VAL(1);
 CONFIG_EXT int config_newverchk3 DEF_VAL(0);
 CONFIG_EXT int config_embedwnd_freesize;
-CONFIG_EXT wchar_t config_skin[MAX_PATH] DEF_VAL(L""), skin_directory[MAX_PATH] DEF_VAL(L"");
+CONFIG_EXT wchar_t config_skin[MAX_PATH] DEF_VAL(L"base-2.91.wsz"), skin_directory[MAX_PATH] DEF_VAL(L"");
 CONFIG_EXT int config_dotitlenum DEF_VAL(1);
 CONFIG_EXT int config_dotasknum DEF_VAL(1);
 CONFIG_EXT char config_check_ft_startup DEF_VAL(0), config_updated_ft_startup DEF_VAL(0), config_uid_ft DEF_VAL(0);

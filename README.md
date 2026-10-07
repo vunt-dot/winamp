@@ -42,3 +42,25 @@ goto line 427 and change from 'return ::DeleteFile((LPTSTR)lpFileName);' to 'ret
 #### Intel IPP 6.1.1.035
 We take Intel IPP 6.1.1.035, modify it and pack to archive.
 Run unpack_intel_ipp_6.1.1.035.cmd to unpack it.
+
+## Default skin and high DPI (this fork)
+
+- The default skin is the classic `base-2.91.wsz`, shipped in `Src/resources/skins/`. Both the post-build step and the installer copy every `*.wsz` in that folder into Winamp's `Skins` folder.
+- To also ship **Winamp5 Classified v5.5**, download it from https://skins.webamp.org/skin/b0fb83cc20af3abe264291bb17fb2a13/Winamp5_Classified_v5.5.wsz/ and save it as `Src/resources/skins/Winamp5_Classified_v5.5.wsz` before building. Switch skins with right-click → Skins, or Alt+S.
+- High DPI and 4K: `winamp.exe` is DPI-aware, so Windows doesn't blur it. On a fresh install with display scaling of 150% or more, or on any 4K-class screen, the main window and EQ start in double size (Ctrl+D toggles it). That pixel-doubles classic skins so they look sharp. Modern skins (Bento, Big Bento, Winamp Modern) follow the same double-size setting by default and are also enlarged with sharp pixel doubling rather than blurred. The x64 build now embeds `manifest64.xml` as well.
+- Build steps: install VS2019 with the v142 toolset and Windows SDK 10.0.19041, set up the dependencies above, then run `Src\winampAll\build_winampAll_2019.cmd` or build `winampAll_2019.sln`. Use the **Release|Win32** (x86) build: the x64 build has no modern-skin (Bento) support. Output goes to `Build\Winamp_x86_Release\`.
+
+## Ubuntu 24.04 / 26.04 (.deb via Wine)
+
+Winamp is a Windows program, so the Linux package runs the Windows build under Wine. The same `.deb` works on both Ubuntu releases.
+
+1. Build Winamp on Windows (see above), then copy `Build\Winamp_x86_Release\` to the Linux machine.
+2. Build the package: `packaging/linux/build-deb.sh path/to/Winamp_x86_Release` → `winamp_5.9.2-1_all.deb`
+3. Install it:
+   ```sh
+   sudo dpkg --add-architecture i386 && sudo apt update   # 32-bit Wine for the x86 build
+   sudo apt install wine wine32:i386 ./winamp_5.9.2-1_all.deb
+   ```
+4. Run `winamp` or open it from the app menu. Settings go in `~/.local/share/winamp/prefix`.
+
+On first launch, the launcher reads the desktop scaling (`Xft.dpi`, or GNOME's scaling factor) and passes it to Wine. At 150% scaling or more, Winamp then starts in double size. To override the detected value, run `WINAMP_DPI=192 winamp` (96 = 100%, 144 = 150%, 192 = 200%).

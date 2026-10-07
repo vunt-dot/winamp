@@ -19,11 +19,6 @@
    />
   </dependentAssembly>
  </dependency>
- <dependency>
-   <dependentAssembly>
-     <assemblyIdentity type="win32" name="Microsoft.VC90.CRT" version="9.0.30729.6161" processorArchitecture="amd64" publicKeyToken="1fc8b3b9a1e18e3b" />
-   </dependentAssembly>
- </dependency>
  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
   <security>
    <requestedPrivileges>
@@ -50,4 +45,4 @@
    <dpiAware>true</dpiAware>
   </asmv3:windowsSettings>
  </asmv3:application>
-</assembly></assembly>
+</assembly>
