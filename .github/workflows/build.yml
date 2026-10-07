@@ -94,10 +94,20 @@ jobs:
           rem Build the libraries with the same compiler as Winamp (v142). Objects from the
           rem VS2022 compiler need runtime helpers (__ultof3, __dtoul3_legacy, volatileaccessu)
           rem that the v142 linker/CRT does not have.
-          echo.>> .\vcpkg\triplets\community\x86-windows-static-md.cmake
-          echo set(VCPKG_PLATFORM_TOOLSET v142)>> .\vcpkg\triplets\community\x86-windows-static-md.cmake
-          echo.>> .\vcpkg\triplets\x86-windows-static.cmake
-          echo set(VCPKG_PLATFORM_TOOLSET v142)>> .\vcpkg\triplets\x86-windows-static.cmake
+          for %%T in (x86-windows-static-md x86-windows-static) do (
+            set TRIPLET_FILE=
+            if exist .\vcpkg\triplets\%%T.cmake set TRIPLET_FILE=.\vcpkg\triplets\%%T.cmake
+            if exist .\vcpkg\triplets\community\%%T.cmake set TRIPLET_FILE=.\vcpkg\triplets\community\%%T.cmake
+            call :settoolset %%T
+          )
+          goto :install
+          :settoolset
+          if "%TRIPLET_FILE%"=="" (echo triplet %1 not found & exit /b 1)
+          echo.>> "%TRIPLET_FILE%"
+          echo set(VCPKG_PLATFORM_TOOLSET v142)>> "%TRIPLET_FILE%"
+          echo patched %TRIPLET_FILE%
+          exit /b 0
+          :install
           cd .\vcpkg
           vcpkg install --recurse ^
             alac:x86-windows-static-md ^
