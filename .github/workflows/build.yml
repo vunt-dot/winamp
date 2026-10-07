@@ -38,12 +38,15 @@ jobs:
             'Microsoft.VisualStudio.Component.VC.14.29.16.11.x86.x64',
             'Microsoft.VisualStudio.Component.VC.14.29.16.11.ATL',
             'Microsoft.VisualStudio.Component.VC.14.29.16.11.MFC',
+            'Microsoft.VisualStudio.Component.VC.14.29.16.11.x86.x64.Spectre',
             'Microsoft.VisualStudio.Component.Windows10SDK.19041'
           )
           $installArgs = @('modify', '--installPath', "`"$vs`"", '--quiet', '--norestart', '--nocache')
           foreach ($c in $components) { $installArgs += @('--add', $c) }
-          if (Test-Path "$vs\VC\Tools\MSVC\14.29.*\atlmfc\include\atlbase.h") {
-            Write-Host "v142 toolset with ATL already installed"
+          $have = (Test-Path "$vs\VC\Tools\MSVC\14.29.*\atlmfc\include\atlbase.h") -and
+                  (Test-Path "$vs\VC\Tools\MSVC\14.29.*\lib\spectre\x86")
+          if ($have) {
+            Write-Host "v142 toolset with ATL and Spectre libraries already installed"
           } else {
             $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
             $p = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
@@ -52,6 +55,10 @@ jobs:
           Get-ChildItem "$vs\VC\Tools\MSVC" | Select-Object Name
           if (-not (Test-Path "$vs\VC\Tools\MSVC\14.29.*\atlmfc\include\atlbase.h")) {
             Write-Host "::error::MSVC 14.29 (v142) with ATL is not installed"
+            exit 1
+          }
+          if (-not (Test-Path "$vs\VC\Tools\MSVC\14.29.*\lib\spectre\x86")) {
+            Write-Host "::error::MSVC 14.29 (v142) Spectre-mitigated libraries are not installed"
             exit 1
           }
 
@@ -84,6 +91,13 @@ jobs:
           call .\vcpkg\bootstrap-vcpkg.bat -disableMetrics || exit /b 1
           .\vcpkg\vcpkg.exe integrate install || exit /b 1
           xcopy /K /Y /H /C /I /E .\vcpkg-ports\* .\vcpkg\ports\* || exit /b 1
+          rem Build the libraries with the same compiler as Winamp (v142). Objects from the
+          rem VS2022 compiler need runtime helpers (__ultof3, __dtoul3_legacy, volatileaccessu)
+          rem that the v142 linker/CRT does not have.
+          echo.>> .\vcpkg\triplets\community\x86-windows-static-md.cmake
+          echo set(VCPKG_PLATFORM_TOOLSET v142)>> .\vcpkg\triplets\community\x86-windows-static-md.cmake
+          echo.>> .\vcpkg\triplets\x86-windows-static.cmake
+          echo set(VCPKG_PLATFORM_TOOLSET v142)>> .\vcpkg\triplets\x86-windows-static.cmake
           cd .\vcpkg
           vcpkg install --recurse ^
             alac:x86-windows-static-md ^
