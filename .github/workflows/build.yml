@@ -202,12 +202,29 @@ jobs:
             !Build/Winamp_x86_Release/**/*.pdb
           if-no-files-found: warn
 
+      # Projects that cannot build here: sc_serv (SHOUTcast server DSP) links a prebuilt
+      # VS2022-only library, and the wac_network / wac_downloadManager components need
+      # the Qt SDK + Qt VS Tools, which the repo does not ship (only Qt runtime DLLs).
+      # Neither is needed for playback. Any other error fails the job.
       - name: Fail if the build failed
         if: steps.build.outcome != 'success'
         shell: pwsh
         run: |
-          Write-Host "::error::msbuild failed - see the job summary and the msbuild-logs artifact"
-          exit 1
+          $known = 'sc_serv\.vcxproj|wac_network\.vcxproj|wac_downloadManager\.vcxproj'
+          $unexpected = @()
+          if (Test-Path msbuild-errors.log) {
+            $unexpected = Get-Content msbuild-errors.log | Where-Object { $_.Trim() -and $_ -notmatch $known }
+          }
+          if (-not (Test-Path Build\Winamp_x86_Release\winamp.exe)) {
+            Write-Host "::error::winamp.exe was not built"
+            exit 1
+          }
+          if ($unexpected.Count -gt 0) {
+            Write-Host "::error::$($unexpected.Count) unexpected MSBuild error line(s):"
+            $unexpected | Select-Object -First 50 | ForEach-Object { Write-Host $_ }
+            exit 1
+          }
+          Write-Host "Only known optional projects failed (sc_serv, wac_network, wac_downloadManager)."
 
   deb:
     name: Ubuntu .deb (Wine)
