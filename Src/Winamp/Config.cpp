@@ -479,9 +479,10 @@ void config_read(int i)
 	RI(volume);
 	RI(pan);
 	RI(easymove);
-	// on high DPI displays (150% scaling and up, e.g. 4K) default to double size so classic skins
-	// are pixel-doubled instead of tiny. only applies when winamp.ini has no dsize entry yet.
-	config_dsize = (GetDPIY() >= 144);
+	// on high DPI displays (150% scaling and up) or 4K-class screens at any scaling, default to
+	// double size so classic skins are pixel-doubled instead of tiny. only applies when winamp.ini
+	// has no dsize entry yet (the process is DPI aware, so this is the physical screen height).
+	config_dsize = (GetDPIY() >= 144 || GetSystemMetrics(SM_CYSCREEN) >= 1800);
 	RI(dsize);
 	RI(timeleftmode);
 	RI(autoscrollname);

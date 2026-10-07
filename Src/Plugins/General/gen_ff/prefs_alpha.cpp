@@ -130,7 +130,7 @@ INT_PTR CALLBACK ffPrefsProc4(HWND hwndDlg, UINT uMsg, WPARAM wParam,LPARAM lPar
 			width = ResizeComboBoxDropDown(hwndDlg, IDC_COMBO_SCALE, name, 0);
 			SendDlgItemMessageW(hwndDlg, IDC_COMBO_SCALE, CB_ADDSTRING, 0, (LPARAM)(name = WASABI_API_LNGSTRINGW(IDS_ALLLOCKED)));
 			ResizeComboBoxDropDown(hwndDlg, IDC_COMBO_SCALE, name, width);
-			SendDlgItemMessageW(hwndDlg, IDC_COMBO_SCALE, CB_SETCURSEL, !!cfg_uioptions_uselocks.getValueAsInt(), 0);
+			SendDlgItemMessageW(hwndDlg, IDC_COMBO_SCALE, CB_SETCURSEL, !cfg_uioptions_uselocks.getValueAsInt(), 0);
 
 			int oldscale = 1;
 			if (main)
@@ -252,7 +252,7 @@ INT_PTR CALLBACK ffPrefsProc4(HWND hwndDlg, UINT uMsg, WPARAM wParam,LPARAM lPar
 						int sel = SendDlgItemMessageW(hwndDlg, IDC_COMBO_SCALE, CB_GETCURSEL, 0, 0);
 						if (sel != CB_ERR)
 						{
-							cfg_uioptions_uselocks.setValueAsInt(!!sel);
+							cfg_uioptions_uselocks.setValueAsInt(!sel);
 						}
 					}
 					return 0;

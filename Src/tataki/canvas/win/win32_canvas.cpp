@@ -898,7 +898,10 @@ void Canvas::stretchblit(int srcx, int srcy, int srcw, int srch, Canvas *dest, i
 		{
 			HBITMAP hprev = (HBITMAP)SelectObject(hMemDC, hsrcdib);
 
-			scale_internal(srcx,srcy,srcw,srch,srcdib,srcdib_w,srcdib_h,srcdib_p,dstx,dsty,dstw,dsth,dstdib,0);
+			// whole-number upscale (e.g. 2x double size): duplicate pixels so skins stay sharp
+			int nofilter = srcw > 0 && srch > 0 &&
+			               ((__int64)dstw << 16) % srcw == 0 && ((__int64)dsth << 16) % srch == 0;
+			scale_internal(srcx,srcy,srcw,srch,srcdib,srcdib_w,srcdib_h,srcdib_p,dstx,dsty,dstw,dsth,dstdib,nofilter);
 
 			BitBlt(dest->getHDC(), dstx, dsty, dstw, dsth, hMemDC, 0, 0, SRCCOPY);
 			done++;
